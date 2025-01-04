@@ -37,54 +37,54 @@ public class CaveGenerator : MonoBehaviour
     }
 
     private void GenerateNoise()
-{
-    var random = new System.Random(seed);
-    float offsetX = random.Next(-100000, 100000), offsetY = random.Next(-100000, 100000);
-
-    // Define the size of the dense spots
-    int densityRadius = 15;  // Controls how large the dense regions are
-    float densityStrength = 0.6f;  // Controls how much denser the spot is compared to normal cave areas
-
-    for (int x = 0; x < width; x++)
     {
-        for (int y = 0; y < height; y++)
+        var random = new System.Random(seed);
+        float offsetX = random.Next(-100000, 100000), offsetY = random.Next(-100000, 100000);
+
+        // Define the size of the dense spots
+        int densityRadius = 15;  // Controls how large the dense regions are
+        float densityStrength = 0.6f;  // Controls how much denser the spot is compared to normal cave areas
+
+        for (int x = 0; x < width; x++)
         {
-            // Default cave noise
-            float noiseValue = 0f;
-
-            // Combine multiple layers of Perlin noise for general cave generation
-            float[] noiseScales = new float[] { noiseScale, noiseScale * 2, noiseScale * 0.5f };
-            float[] noiseWeights = new float[] { 0.5f, 0.3f, 0.2f };
-
-            for (int i = 0; i < noiseScales.Length; i++)
+            for (int y = 0; y < height; y++)
             {
-                noiseValue += Mathf.PerlinNoise((x + offsetX) * noiseScales[i], (y + offsetY) * noiseScales[i]) * noiseWeights[i];
-            }
+                // Default cave noise
+                float noiseValue = 0f;
 
-            // Adding a bit of random variance to the cave generation
-            noiseValue += (float)random.NextDouble() * 0.1f - 0.05f;
+                // Combine multiple layers of Perlin noise for general cave generation
+                float[] noiseScales = new float[] { noiseScale, noiseScale * 2, noiseScale * 0.5f };
+                float[] noiseWeights = new float[] { 0.5f, 0.3f, 0.2f };
 
-            // Check if we are in a dense spot
-            bool isInDenseSpot = false;
-            if (random.NextDouble() < 0.1f)  // 10% chance to generate a dense spot in the area
-            {
-                // Check if we're within the "density" radius of a random point
-                int centerX = random.Next(0, width);
-                int centerY = random.Next(0, height);
-
-                float distance = Mathf.Sqrt(Mathf.Pow(x - centerX, 2) + Mathf.Pow(y - centerY, 2));
-                if (distance < densityRadius)
+                for (int i = 0; i < noiseScales.Length; i++)
                 {
-                    isInDenseSpot = true;
-                    noiseValue += densityStrength;  // Increase the noise value to create a denser area
+                    noiseValue += Mathf.PerlinNoise((x + offsetX) * noiseScales[i], (y + offsetY) * noiseScales[i]) * noiseWeights[i];
                 }
-            }
 
-            // Thresholding to determine cave or solid ground
-            caveMap[x, y] = noiseValue > threshold || isInDenseSpot;
+                // Adding a bit of random variance to the cave generation
+                noiseValue += (float)random.NextDouble() * 0.1f - 0.05f;
+
+                // Check if we are in a dense spot
+                bool isInDenseSpot = false;
+                if (random.NextDouble() < 0.1f)  // 10% chance to generate a dense spot in the area
+                {
+                    // Check if we're within the "density" radius of a random point
+                    int centerX = random.Next(0, width);
+                    int centerY = random.Next(0, height);
+
+                    float distance = Mathf.Sqrt(Mathf.Pow(x - centerX, 2) + Mathf.Pow(y - centerY, 2));
+                    if (distance < densityRadius)
+                    {
+                        isInDenseSpot = true;
+                        noiseValue += densityStrength;  // Increase the noise value to create a denser area
+                    }
+                }
+
+                // Thresholding to determine cave or solid ground
+                caveMap[x, y] = noiseValue > threshold || isInDenseSpot;
+            }
         }
     }
-}
 
 
     private void AssignBiomes()
