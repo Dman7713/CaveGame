@@ -1,133 +1,59 @@
 using UnityEngine;
 using UnityEngine.Tilemaps;
-using UnityEditor;
+using UnityEditor; // Required for the Button attribute
+using System.Collections.Generic;
 
-public class SpawnTileAboveBelowMultiple : MonoBehaviour
+public class PlaceTopAndBottomTiles : MonoBehaviour
 {
-    [Header("Tilemap Settings")]
-    public Tilemap sourceTilemap; // The tilemap with the specific tiles
-    public Tilemap targetTilemap; // The tilemap where the new tiles will be placed
+    public Tilemap tilemap;          // Reference to the Tilemap
+    public TileAtlas[] tileAtlases;  // An array of TileAtlases for each biome
 
-    [Header("Tile Settings")]
-    public TileBase[] specificTiles; // Array of specific tiles to check for
-    public TileBase[] targetTiles;   // Array of target tiles to place
-
-    [Header("Spawn Settings")]
-    public int numberOfTilesToSpawn = 10; // Maximum number of tiles to spawn
-
-    [ContextMenu("Spawn Above/Below Tiles")]
-    public void SpawnAboveBelowTiles()
+    [System.Serializable]
+    public class TileAtlas
     {
-        if (sourceTilemap == null || targetTilemap == null || specificTiles.Length != targetTiles.Length)
-        {
-            Debug.LogError("Please assign all required references and ensure arrays match in length.");
-            return;
-        }
-
-        int spawnedCount = 0;
-
-        BoundsInt bounds = sourceTilemap.cellBounds;
-
-        // Iterate through the bounds of the source tilemap
-        for (int x = bounds.xMin; x <= bounds.xMax; x++)
-        {
-            for (int y = bounds.yMin; y <= bounds.yMax; y++)
-            {
-                Vector3Int currentPosition = new Vector3Int(x, y, 0);
-
-                // Check if the tile at the current position matches any specific tile
-                for (int i = 0; i < specificTiles.Length; i++)
-                {
-                    if (sourceTilemap.GetTile(currentPosition) == specificTiles[i])
-                    {
-                        // Define positions above and below
-                        Vector3Int abovePosition = currentPosition + new Vector3Int(0, 1, 0);
-                        Vector3Int belowPosition = currentPosition + new Vector3Int(0, -1, 0);
-
-                        // Spawn above if possible
-                        if (!targetTilemap.HasTile(abovePosition) && spawnedCount < numberOfTilesToSpawn)
-                        {
-                            targetTilemap.SetTile(abovePosition, targetTiles[i]);
-                            spawnedCount++;
-
-                            if (spawnedCount >= numberOfTilesToSpawn)
-                                break;
-                        }
-
-                        // Spawn below if possible
-                        if (!targetTilemap.HasTile(belowPosition) && spawnedCount < numberOfTilesToSpawn)
-                        {
-                            targetTilemap.SetTile(belowPosition, targetTiles[i]);
-                            spawnedCount++;
-
-                            if (spawnedCount >= numberOfTilesToSpawn)
-                                break;
-                        }
-                    }
-                }
-
-                if (spawnedCount >= numberOfTilesToSpawn)
-                    break;
-            }
-
-            if (spawnedCount >= numberOfTilesToSpawn)
-                break;
-        }
-
-        Debug.Log($"Spawned {spawnedCount} tiles above or below the specific tiles.");
+        public string biomeName;      // Name of the biome
+        public TileBase targetTile;   // The specific tile to check for
+        public TileBase bottomTile;      // The tile to place above the targetTile
+        public TileBase topTile;   // The tile to place below the targetTile
     }
 
-    [ContextMenu("Remove Target Tiles")]
-    public void RemoveTargetTiles()
+    // This method will be triggered by a button in the Inspector
+    [ContextMenu("Place Top and Bottom Tiles")]
+    public void PlaceTilesAboveAndBelow()
     {
-        if (targetTilemap == null || targetTiles.Length == 0)
-        {
-            Debug.LogError("Please assign the target tilemap and target tiles.");
-            return;
-        }
+        // Get the bounds of the tilemap
+        BoundsInt bounds = tilemap.cellBounds;
 
-        BoundsInt bounds = targetTilemap.cellBounds;
-
-        // Iterate through the bounds of the target tilemap
-        for (int x = bounds.xMin; x <= bounds.xMax; x++)
+        // Iterate through all tiles in the bounds
+        for (int x = bounds.xMin; x < bounds.xMax; x++)
         {
-            for (int y = bounds.yMin; y <= bounds.yMax; y++)
+            for (int y = bounds.yMin; y < bounds.yMax; y++)
             {
-                Vector3Int currentPosition = new Vector3Int(x, y, 0);
+                Vector3Int position = new Vector3Int(x, y, 0);
+                TileBase currentTile = tilemap.GetTile(position);
 
-                // Check if the tile at the current position is one of the target tiles
-                foreach (TileBase targetTile in targetTiles)
+                // Iterate through each TileAtlas to find matching tiles for the current biome
+                foreach (var atlas in tileAtlases)
                 {
-                    if (targetTilemap.GetTile(currentPosition) == targetTile)
+                    // Check if the current tile matches the targetTile for the current biome
+                    if (currentTile == atlas.targetTile)
                     {
-                        targetTilemap.SetTile(currentPosition, null);
+                        // Place the top tile above the targetTile
+                        PlaceTileIfEmpty(new Vector3Int(x, y + 1, 0), atlas.bottomTile); // Above
+                        // Place the bottom tile below the targetTile
+                        PlaceTileIfEmpty(new Vector3Int(x, y - 1, 0), atlas.topTile); // Below
                     }
                 }
             }
         }
-
-        Debug.Log("Removed all target tiles from the target tilemap.");
     }
-}
 
-#if UNITY_EDITOR
-[CustomEditor(typeof(SpawnTileAboveBelowMultiple))]
-public class SpawnTileAboveBelowMultipleEditor : Editor
-{
-    public override void OnInspectorGUI()
+    void PlaceTileIfEmpty(Vector3Int position, TileBase tile)
     {
-        DrawDefaultInspector();
-
-        SpawnTileAboveBelowMultiple script = (SpawnTileAboveBelowMultiple)target;
-        if (GUILayout.Button("Spawn Above/Below Tiles"))
+        // Only place the tile if the position is empty
+        if (tilemap.GetTile(position) == null)
         {
-            script.SpawnAboveBelowTiles();
-        }
-
-        if (GUILayout.Button("Remove Target Tiles"))
-        {
-            script.RemoveTargetTiles();
+            tilemap.SetTile(position, tile);
         }
     }
 }
-#endif

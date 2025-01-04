@@ -1,34 +1,26 @@
 using UnityEngine;
 using UnityEditor;
 using UnityEngine.Tilemaps;
+using System.Linq;
 
 public class CaveGenerator : MonoBehaviour
 {
     [Header("Cave Dimensions")]
-    public int width = 100;
-    public int height = 100;
+    public int width = 100, height = 100;
 
     [Header("Noise Settings")]
-    public float noiseScale = 0.1f;
+    public float noiseScale = 0.1f, biomeNoiseScale = 0.05f;
     public int seed;
     public bool useRandomSeed = true;
 
     [Header("Threshold")]
-    [Range(0, 1)]
-    public float threshold = 0.5f;
-
-    [Header("Biome Settings")]
-    public float biomeNoiseScale = 0.05f;
-    [Range(0, 1)]
-    public float biomeThreshold = 0.7f;
+    [Range(0, 1)] public float threshold = 0.5f, biomeThreshold = 0.7f;
 
     [Header("Tile Settings")]
-    public Tilemap tilemap;  // Main tilemap for the cave
-    public Tilemap outlineTilemap;  // Tilemap for the black outline
+    public Tilemap tilemap;
     public TileBase defaultTile;
     public TileBase[] biomeTiles;
-    public TileBase blackTile;  // The black tile used for the outline
-    public TileBase[] oreTiles; // Ore tiles to be placed in the cave
+    public TileBase[] oreTiles;
 
     private int[,] biomeMap;
     private bool[,] caveMap;
@@ -37,146 +29,105 @@ public class CaveGenerator : MonoBehaviour
     {
         caveMap = new bool[width, height];
         biomeMap = new int[width, height];
-
-        if (useRandomSeed)
-        {
-            seed = Random.Range(int.MinValue, int.MaxValue);
-        }
+        seed = useRandomSeed ? Random.Range(int.MinValue, int.MaxValue) : seed;
 
         GenerateNoise();
         AssignBiomes();
         ApplyTiles();
-        ApplyOutline();
     }
 
     private void GenerateNoise()
-    {
-        System.Random random = new System.Random(seed);
-        float offsetX = random.Next(-100000, 100000);
-        float offsetY = random.Next(-100000, 100000);
+{
+    var random = new System.Random(seed);
+    float offsetX = random.Next(-100000, 100000), offsetY = random.Next(-100000, 100000);
 
-        for (int x = 0; x < width; x++)
+    // Define the size of the dense spots
+    int densityRadius = 15;  // Controls how large the dense regions are
+    float densityStrength = 0.6f;  // Controls how much denser the spot is compared to normal cave areas
+
+    for (int x = 0; x < width; x++)
+    {
+        for (int y = 0; y < height; y++)
         {
-            for (int y = 0; y < height; y++)
+            // Default cave noise
+            float noiseValue = 0f;
+
+            // Combine multiple layers of Perlin noise for general cave generation
+            float[] noiseScales = new float[] { noiseScale, noiseScale * 2, noiseScale * 0.5f };
+            float[] noiseWeights = new float[] { 0.5f, 0.3f, 0.2f };
+
+            for (int i = 0; i < noiseScales.Length; i++)
             {
-                float sampleX = (x + offsetX) * noiseScale;
-                float sampleY = (y + offsetY) * noiseScale;
-                float noiseValue = Mathf.PerlinNoise(sampleX, sampleY);
-                caveMap[x, y] = noiseValue > threshold;
+                noiseValue += Mathf.PerlinNoise((x + offsetX) * noiseScales[i], (y + offsetY) * noiseScales[i]) * noiseWeights[i];
             }
+
+            // Adding a bit of random variance to the cave generation
+            noiseValue += (float)random.NextDouble() * 0.1f - 0.05f;
+
+            // Check if we are in a dense spot
+            bool isInDenseSpot = false;
+            if (random.NextDouble() < 0.1f)  // 10% chance to generate a dense spot in the area
+            {
+                // Check if we're within the "density" radius of a random point
+                int centerX = random.Next(0, width);
+                int centerY = random.Next(0, height);
+
+                float distance = Mathf.Sqrt(Mathf.Pow(x - centerX, 2) + Mathf.Pow(y - centerY, 2));
+                if (distance < densityRadius)
+                {
+                    isInDenseSpot = true;
+                    noiseValue += densityStrength;  // Increase the noise value to create a denser area
+                }
+            }
+
+            // Thresholding to determine cave or solid ground
+            caveMap[x, y] = noiseValue > threshold || isInDenseSpot;
         }
     }
+}
+
 
     private void AssignBiomes()
     {
-        System.Random random = new System.Random(seed);
-        float offsetX = random.Next(-100000, 100000);
-        float offsetY = random.Next(-100000, 100000);
+        var random = new System.Random(seed);
+        float offsetX = random.Next(-100000, 100000), offsetY = random.Next(-100000, 100000);
 
         for (int x = 0; x < width; x++)
-        {
             for (int y = 0; y < height; y++)
             {
                 if (caveMap[x, y])
                 {
-                    float sampleX = (x + offsetX) * biomeNoiseScale;
-                    float sampleY = (y + offsetY) * biomeNoiseScale;
-                    float noiseValue = Mathf.PerlinNoise(sampleX, sampleY);
+                    float noiseValue = Mathf.PerlinNoise((x + offsetX) * biomeNoiseScale, (y + offsetY) * biomeNoiseScale);
+                    biomeMap[x, y] = noiseValue > biomeThreshold ? random.Next(biomeTiles.Length) : -1;
 
-                    if (noiseValue > biomeThreshold)
-                    {
-                        biomeMap[x, y] = random.Next(biomeTiles.Length);
-                    }
-                    else
-                    {
-                        biomeMap[x, y] = -1; // Default stone tile
-                    }
-
-                    // Chance to place ore (use a random chance, modify as needed)
-                    if (random.NextDouble() < 0.05f) // 5% chance to place ore
-                    {
-                        biomeMap[x, y] = -2; // Assign a special value for ore placement
-                    }
+                    if (random.NextDouble() < 0.05f)
+                        biomeMap[x, y] = -2; // Ore placement
                 }
                 else
-                {
                     biomeMap[x, y] = -1; // No biome for empty space
-                }
             }
-        }
     }
 
     private void ApplyTiles()
     {
-        if (tilemap == null || defaultTile == null || biomeTiles == null || biomeTiles.Length == 0)
+        if (tilemap == null || defaultTile == null || biomeTiles.Length == 0)
         {
-            Debug.LogError("Tilemap, default tile, or biome tiles are not assigned!");
+            Debug.LogError("Tilemap or tiles are not assigned!");
             return;
         }
 
         tilemap.ClearAllTiles();
 
         for (int x = 0; x < width; x++)
-        {
             for (int y = 0; y < height; y++)
             {
-                Vector3Int position = new Vector3Int(x, y, 0);
                 if (caveMap[x, y])
                 {
-                    int biomeIndex = biomeMap[x, y];
-                    TileBase tile = (biomeIndex >= 0 && biomeIndex < biomeTiles.Length) ? biomeTiles[biomeIndex] : defaultTile;
-                    if (biomeMap[x, y] == -2) // If it's ore
-                    {
-                        tile = oreTiles[Random.Range(0, oreTiles.Length)]; // Choose a random ore tile
-                    }
+                    Vector3Int position = new Vector3Int(x, y, 0);
+                    TileBase tile = biomeMap[x, y] == -2 ? oreTiles[Random.Range(0, oreTiles.Length)] : biomeMap[x, y] >= 0 ? biomeTiles[biomeMap[x, y]] : defaultTile;
                     tilemap.SetTile(position, tile);
                 }
             }
-        }
-    }
-
-    private void ApplyOutline()
-    {
-        if (outlineTilemap == null || blackTile == null)
-        {
-            Debug.LogError("Outline tilemap or black tile is not assigned!");
-            return;
-        }
-
-        outlineTilemap.ClearAllTiles();
-
-        for (int x = 0; x < width; x++)
-        {
-            for (int y = 0; y < height; y++)
-            {
-                // Check if the current tile is a cave tile and if it's on the edge
-                if (caveMap[x, y])
-                {
-                    // Check if it's on the edge of the cave
-                    bool isEdge = false;
-
-                    for (int dx = -1; dx <= 1; dx++)
-                    {
-                        for (int dy = -1; dy <= 1; dy++)
-                        {
-                            if (x + dx < 0 || x + dx >= width || y + dy < 0 || y + dy >= height || !caveMap[x + dx, y + dy])
-                            {
-                                isEdge = true;
-                                break;
-                            }
-                        }
-
-                        if (isEdge) break;
-                    }
-
-                    if (isEdge)
-                    {
-                        Vector3Int position = new Vector3Int(x, y, 0);
-                        outlineTilemap.SetTile(position, blackTile);
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -186,12 +137,7 @@ public class CaveGeneratorEditor : Editor
     public override void OnInspectorGUI()
     {
         DrawDefaultInspector();
-
-        CaveGenerator caveGen = (CaveGenerator)target;
-
         if (GUILayout.Button("Generate Cave"))
-        {
-            caveGen.GenerateCave();
-        }
+            ((CaveGenerator)target).GenerateCave();
     }
 }
