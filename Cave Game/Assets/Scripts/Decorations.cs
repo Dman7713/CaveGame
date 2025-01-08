@@ -1,7 +1,5 @@
 using UnityEngine;
 using UnityEngine.Tilemaps;
-using UnityEditor; // Required for the Button attribute
-using System.Collections.Generic;
 
 public class PlaceTopAndBottomTiles : MonoBehaviour
 {

@@ -37,22 +37,26 @@ public class OutlineBoxGenerator : MonoBehaviour
     {
         if (tilemap == null || outlineTile == null) return;
 
-        tilemap.ClearAllTiles(); // Clear previous tiles in the main Tilemap
         Vector3Int bottomLeft = position;
 
-        // Generate the box with noise applied only to the border area
+        // Generate the box with noise applied to the tiles
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
             {
+                Vector3Int tilePosition = bottomLeft + new Vector3Int(x, y, 0);
+
                 // Check if the current tile is part of the border (within the border width)
                 if (IsBorder(x, y))
                 {
-                    // Calculate the distance from the border
-                    float distanceFromEdge = Mathf.Min(Mathf.Abs(x - 0), Mathf.Abs(x - width), Mathf.Abs(y - 0), Mathf.Abs(y - height));
-                    float normalizedDistance = distanceFromEdge / borderWidth; // Normalize based on the border width
-
-                    // Adjust noise threshold based on distance from the border's center
+                    // Border noise logic
+                    float distanceFromEdge = Mathf.Min(
+                        Mathf.Abs(x - 0),
+                        Mathf.Abs(x - (width - 1)),
+                        Mathf.Abs(y - 0),
+                        Mathf.Abs(y - (height - 1))
+                    );
+                    float normalizedDistance = distanceFromEdge / borderWidth;
                     float noiseThreshold = Mathf.Lerp(noiseThresholdCenter, noiseThresholdEdge, normalizedDistance);
 
                     // Combine multiple layers of noise
@@ -60,17 +64,20 @@ public class OutlineBoxGenerator : MonoBehaviour
                     for (int i = 0; i < numberOfNoiseLayers; i++)
                     {
                         float layerStrength = noiseLayerStrength * (i + 1);
-                        float layerNoiseValue = Mathf.PerlinNoise((x + position.x + i * 1000) * noiseScale, (y + position.y + i * 1000) * noiseScale);
+                        float layerNoiseValue = Mathf.PerlinNoise(
+                            (x + position.x + i * 1000) * noiseScale,
+                            (y + position.y + i * 1000) * noiseScale
+                        );
                         noiseValue += layerNoiseValue * layerStrength;
                     }
 
                     // Normalize combined noise to a range of 0-1
                     noiseValue = Mathf.Clamp01(noiseValue / numberOfNoiseLayers);
 
-                    // If the noise value exceeds the threshold, set the tile on the main tilemap
+                    // If the noise value exceeds the threshold, replace or add the tile
                     if (noiseValue > noiseThreshold)
                     {
-                        tilemap.SetTile(bottomLeft + new Vector3Int(x, y, 0), outlineTile);
+                        tilemap.SetTile(tilePosition, outlineTile);
                     }
                 }
             }
